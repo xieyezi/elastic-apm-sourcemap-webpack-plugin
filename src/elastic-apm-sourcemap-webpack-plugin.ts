@@ -25,20 +25,17 @@ export default class ElasticAPMSourceMapPlugin implements WebpackPluginInstance 
     this.config = Object.assign(
       {
         logLevel: 'warn',
-        ignoreErrors: false
+        ignoreErrors: false,
       },
       config
     );
     this.logger = webpackLog({
       name: 'ElasticAPMSourceMapPlugin',
-      level: this.config.logLevel
+      level: this.config.logLevel,
     });
   }
 
-  emit(
-    compilation: webpack.Compilation,
-    callback: (error?: Error) => void
-  ): Promise<void> {
+  emit(compilation: webpack.Compilation, callback: (error?: Error) => void): Promise<void> {
     const logger = this.logger;
 
     logger.debug(`starting uploading sourcemaps with configs: ${JSON.stringify(this.config)}.`);
@@ -52,7 +49,7 @@ export default class ElasticAPMSourceMapPlugin implements WebpackPluginInstance 
             logger.debug('finished uploading sourcemaps.');
             callback();
           })
-          .catch(err => {
+          .catch((err) => {
             logger.error(err);
 
             if (this.config.ignoreErrors) {
@@ -74,14 +71,14 @@ export default class ElasticAPMSourceMapPlugin implements WebpackPluginInstance 
 
         formData.append('sourcemap', compilation.assets[sourceMap].source(), {
           filename: sourceMap,
-          contentType: 'application/json'
+          contentType: 'application/json',
         });
         formData.append('service_version', this.config.serviceVersion);
         formData.append('bundle_filepath', bundleFilePath);
         formData.append('service_name', this.config.serviceName);
 
         const headers = this.config.secret
-          ? { Authorization: `Bearer ${this.config.secret}` }
+          ? this.config.secret // example: { Authorization: `Bearer ${this.config.secret}` }
           : undefined;
 
         logger.debug(
@@ -91,9 +88,9 @@ export default class ElasticAPMSourceMapPlugin implements WebpackPluginInstance 
         return fetch(this.config.serverURL, {
           method: 'POST',
           body: formData,
-          headers: headers
+          headers: headers as any,
         })
-          .then(response => Promise.all([response.ok, response.text()]))
+          .then((response) => Promise.all([response.ok, response.text()]))
           .then(([ok, responseText]) => {
             if (ok) {
               logger.debug(`uploaded ${sourceMap}.`);
@@ -104,7 +101,7 @@ export default class ElasticAPMSourceMapPlugin implements WebpackPluginInstance 
           });
       }),
       R.map((chunk) => {
-        const { files, auxiliaryFiles } = chunk
+        const { files, auxiliaryFiles } = chunk;
 
         const sourceFile = R.find(R.test(/\.js$/), files || []);
         // Webpack 4 uses `files` and does not have `auxiliaryFiles`. The following line
@@ -117,23 +114,20 @@ export default class ElasticAPMSourceMapPlugin implements WebpackPluginInstance 
   }
 
   apply(compiler: webpack.Compiler): void {
-
     /* istanbul ignore else */
     if (compiler.hooks) {
       // webpack 5
       compiler.hooks.emit.tapAsync('ElasticAPMSourceMapPlugin', (compilation, callback) =>
         this.emit(compilation, callback)
       );
-    // We only run tests against Webpack 5 currently.
-    /* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
-    // @ts-expect-error
+      // We only run tests against Webpack 5 currently.
+      /* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
+      // @ts-expect-error
     } else if (compiler.plugin) {
       // Webpack 4
       /* eslint-disable-next-line @typescript-eslint/ban-ts-comment */
       // @ts-expect-error
-      compiler.plugin('emit', (compilation, callback) =>
-        this.emit(compilation, callback)
-      );
+      compiler.plugin('emit', (compilation, callback) => this.emit(compilation, callback));
     } else {
       this.logger.error(`does not compatible with the current Webpack version`);
     }
